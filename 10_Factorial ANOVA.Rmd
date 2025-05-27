@@ -1,0 +1,141 @@
+---
+title: "Factorial ANOVA: Perspective-Taking in Language Comprehension"
+author: "Mohammad Pourabbasian"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Task 1A: Libraries
+
+```{r t1A, message = FALSE, warning=FALSE}
+# load in the packages
+library(afex)
+library(tidyverse)
+```
+
+## Task 1B: Loading in the data
+
+```{r t1B, warning=FALSE, message = FALSE}
+dat <- read_csv("keysar_lin_barr_2003.csv")
+```
+
+You will see the following columns:
+
+|variable   |description|
+|-----------|-----------|
+|`subject`  |unique identifier for each subject|
+|`sex`      |whether the subject was male or female|
+|`condition`|what condition the subject was in|
+|`looktime` |egocentric interference|
+
+We have simplified things from the original experiment by collapsing the baseline vs. experimental conditions into a single DV.  Our DV, egocentric interference, is the average difference in looking time for each subject (in milliseconds per trial) for hidden competitors (e.g., small candle) versus hidden noncompetitors (e.g., apple). The larger this number, the more egocentric interference the subject experienced.
+
+## Task 2: Calculate cell means
+
+
+One of the elements we will need for our write-up is some descriptives. We want to start by creating some summary statistics for the four conditions. Remember, two factors (sex, condition) with 2 levels each (sex: female vs male; condition: false belief vs ignorance) will give four conditions, and as such in our summary table, four cells created by factorially combining sex and condition. 
+
+
+```{r t2}
+cell_means <- dat %>% mutate(sex = as.factor(sex), condition = as.factor(condition)) %>% group_by(sex, condition) %>% summarise(n = n(),
+                                                                                                                                m = mean(looktime),
+                                                                                                                                sd = sd(looktime), se = sd/sqrt(n))
+```
+
+## Task 3: Marginal means for sex
+
+We will also need to have some descriptives where we just look at the means of a given factor; the marginal means - the means of the levels of one factor regardless of the other factor.
+
+
+```{r t3}
+marg_sex <- dat %>% mutate(sex = as.factor(sex), condition = as.factor(condition)) %>% group_by(sex) %>% summarise(m = mean(looktime),
+                                                                                                                                sd = sd(looktime))
+```
+
+## Task 4: Marginal means for condition
+
+And now do the same for condition. 
+
+
+```{r t4}
+marg_cond <- dat %>% mutate(sex = as.factor(sex), condition = as.factor(condition)) %>% group_by(condition) %>% summarise(m = mean(looktime),
+                                                                                                                                sd = sd(looktime))
+```
+
+## Task 5: Interaction plot
+
+```{r t5}
+# to do: something with ggplot to replicate the figure
+dodge <- position_dodge(width = 0.3)
+
+cell_means %>%
+  ggplot(aes(x = condition, y = m, group = sex, shape = sex, color = sex)) +
+  geom_point(size = 2, position = dodge) +
+  geom_line(aes(linetype = sex), position = dodge) +
+  geom_errorbar(aes(ymin = m - se, ymax = m + se), width = 0.1, position = dodge) +
+  coord_cartesian(ylim = c(0, 1300)) +
+  scale_x_discrete(labels = c("false belief" = "False Belief", "ignorance" = "Ignorance")) +
+  scale_color_brewer(palette = "Dark2") + # Or try "Set1", "Paired"
+  labs(title = "Interaction between Condition and Sex on Looking Time", y = "mean looking time (msecs)") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+  )
+
+
+```
+
+## Task 6: Recap Question 1
+
+3. We hypothesised that there would be a significant interaction between condition and sex of participant on egocentric interference (mean looking time (msecs))
+
+## Task 7: Recap Question 2
+
+The female participants have an average longer looking time (M = 777.98, SD = 911.53) than the male participants (M = 555.04, SD = 707.81) which may suggest a significant main effect of sex
+
+## Task 8: Recap Question 3
+
+
+2. The participants in the false belief group had an average shorter looking time (M = 549.58, SD = 775.91) than the participants in the ignorance group (M = 749.58, SD = 861.23) which may suggest a significant main effect of condition.
+
+
+## Task 9: Running the Factorial ANOVA
+
+
+```{r t9}
+mod <- aov_ez(id = "subject",
+              dv = "looktime",
+              between = c("sex", "condition"),
+              es = "pes",
+              type = "3",
+              include_aov = TRUE,
+              data = dat
+              
+              )
+factorial_output <- mod$anova_table %>% broom::tidy()
+```
+
+# Task 10: Interpreting the ANOVA output Question
+
+
+3. There is no significant main effect of sex or condition and there is no significant interaction between condition and sex.
+
+
+## Task 11: Report your results
+
+
+Looking time for females (M = `r marg_sex$m[1] %>% round(2)`), SD = `r marg_sex$sd[1]%>% round(2)`)) was higher than those for males (M = `r marg_sex$m[2] %>% round(2)`, SD = `r marg_sex$sd[2]%>% round(2)`).
+We conducted the same repeated measures ANOVA with looking time as the dependent measure and didn't find a main effect of condition, F(`r factorial_output$num.Df[2]`, `r factorial_output$den.Df[2]`) = `r factorial_output$statistic[2] %>% round(2)`, p = .39, ηp2 = `r factorial_output$ges[2] %>% round(3)`, nor did we find a main effect of sex F(`r factorial_output$num.Df[1]`, `r factorial_output$den.Df[1]`) = `r factorial_output$statistic[1] %>% round(2)`, p = .42, ηp2 = `r factorial_output$ges[1] %>% round(3)` ; We didn't observe an interaction between sex and type of condition, F(`r factorial_output$num.Df[3]`, `r factorial_output$den.Df[3]`) = `r factorial_output$statistic[3] %>% round(3)`, p = `r factorial_output$p.value[3] %>% round(2)`, ηp2 = `r factorial_output$ges[3] %>% round(3)`. 
+
+##Report alternative  
+
+  A two-way between-subjects factorial ANOVA was conducted testing the main effects and interaction between sex (male vs. female) and condition (false belief vs. ignorance) on the average looking time (msecs) on a matching task. Results revealed no significant interaction (F(1, 36) = .21, p = .647) suggesting that there is no modulation of condition by sex of participant in this looking task. Furthermore, there was no significant main effect of sex (F(1, 36) = .64, p = .429) suggesting that male (M = 555.04, SD = 707.81) and female participants (M = 777.98, SD = 911.53) perform similarly in this task. Finally, there was no significant main effect of condition (F(1, 36) = .79, p = .38) suggesting that whether participants were given a false belief scenario (M = 594.58, SD = 775.91) or an ignorance scenario (M = 794.58, SD = 861.23) had no overall impact on their performance.
+**Finished**

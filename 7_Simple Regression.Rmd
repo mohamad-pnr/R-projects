@@ -1,0 +1,98 @@
+---
+title: "Regression"
+author: "Mohammad Pourabbasian"
+date: "2025-03-24"
+output: html_document
+---
+```{r setup}
+library(pwr)
+library(broom)
+library(see)
+library(performance)
+library(report)
+library(tidyverse)
+stars <- read_csv("L3_stars.csv")
+engage <- read_csv("psess.csv")
+```
+```{r T2}
+#Tidy the data
+stars2 <- stars %>% pivot_longer(cols = Q01:Q51,
+                                 names_to = "Question",
+                                 values_to = "Score") %>% arrange(ID)
+
+```
+```{r T3}
+#Calculating mean anxiety score
+stars_means <- stars2 %>%
+  group_by(ID) %>%
+  summarise(mean_anxiety = mean(Score, na.rm = TRUE))
+```
+
+```{r T4}
+# join engage and stars
+joined <- inner_join(stars_means,engage,  by = "ID") 
+```
+
+```{r T5}
+#Calculate descriptives for the variables overall
+descriptives <- joined %>%
+  summarise(mean_anx = mean(mean_anxiety, na.rm = TRUE),
+            sd_anx = sd(mean_anxiety, na.rm = TRUE),
+            mean_weeks = mean(n_weeks, na.rm = TRUE),
+            sd_weeks = sd(n_weeks, na.rm = TRUE))
+
+```
+
+```{r T6}
+#visualisation 
+
+joined %>% ggplot(aes(x = mean_anxiety, y = n_weeks)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_bw()
+```
+
+```{r T7}
+#Running the regression
+mod <- lm(n_weeks ~ mean_anxiety, joined)
+mod_summary <- summary(mod)
+```
+```{r T8}
+#Assumption check
+check_model(mod)
+check_normality(mod)
+check_heteroscedasticity(mod)
+
+```
+```{r T9}
+#Power and effect size
+##calculate the minimum effect size
+pwr.f2.test(u = 1, v = 35, f2 = NULL, sig.level = .05, power = .8)
+##calculate observed effect size(f2)
+f2 <- mod_summary$adj.r.squared/(1- mod_summary$adj.r.squared)
+
+```
+
+```{r T10}
+#Write-up
+##manually calculating p-value for inline code
+f <- mod_summary$fstatistic
+mod_p <- pf(f[1], f[2], f[3], lower = FALSE)
+
+##Write-up using report
+report(mod)
+
+```
+
+#Inline Report  
+
+A simple linear regression was performed with engagement (M = `r descriptives$mean_weeks %>% round(2)`, SD = `r descriptives$sd_anx %>% round(2)`) as the outcome variable and statistics anxiety (M = `r descriptives$mean_anx %>% round(2)`, SD = `r descriptives$sd_anx %>% round(2)`) as the predictor variable. The results of the regression indicated that the model significantly predicted course engagement (F(`r mod_summary$fstatistic[2]`, `r mod_summary$fstatistic[3]`) = `r mod_summary$fstatistic[1] %>% round(2)`, p < .001, Adjusted R2 = `r mod_summary$adj.r.squared %>% round(2)`, f2 = .63), accounting for `r (mod_summary$adj.r.squared %>% round(2))*100`% of the variance. Anxiety was a significant predictor (b = `r mod$coefficients[2] %>% round(2)`, p < `r mod_p %>% round(3)`.
+)
+```{r}
+
+```
+
+
+ 
+
+

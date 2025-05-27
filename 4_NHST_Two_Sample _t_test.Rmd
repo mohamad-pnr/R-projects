@@ -1,0 +1,129 @@
+---
+title: "Independent samples t-test"
+author: "Mohammad Pourabbasian"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+## DO NOT DELETE THIS CHUNK OR ALTER ANY OF THE LINES WITHIN THIS CHUNK!
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Task 1A: Libraries
+
+```{r t1A, message = FALSE}
+## load in the tidyverse and broom packages
+library("broom")
+library("tidyverse")
+
+```
+
+## Task 1B: Loading in the data
+
+
+```{r t1B, message = FALSE}
+crt <- read_csv("CRT_Data.csv")
+```
+
+## Task 2: Identify relevant columns
+
+
+
+```{r t2}
+crt2 <- crt %>% select(Treatment, ID, CorrectAnswers)
+```
+
+**NOTE:** For the remainder of this exercise you should use `crt2` as the main source tibble and not `crt`.
+
+## Task 3: Verify the number of subjects in each group
+
+The Participants section of the article contains the following statement:
+
+**243 men (mostly college students; for demographic details, see Table S1 in the Supplemental Material available online) were randomly administered a topical gel containing either testosterone (n = 125) or placebo (n = 118).**
+
+In the t3 code block below, replace the `NULLs` with lines of code to calculate:
+
+1. The number of men in each Treatment. This should be a tibble/table called `cond_counts` containing a column called `Treatment` showing the two groups and a column called `n` which shows the number of men in each group.
+
+2. The total number of men in the sample. This should be a single value, not a tibble/table, and should be stored in `n_men`. 
+
+
+```{r t3}
+cond_counts <- crt2 %>% group_by(Treatment) %>%
+  summarise(n = n())
+n_men <- crt %>% summarise(n = n()) %>% pull()
+```
+
+
+**`r n_men` men (mostly college students; for demographic details, see Table S1 in the Supplemental Material available online) were randomly administered a topical gel containing either testosterone (n = `r filter(cond_counts, Treatment == "1") %>% pull(n)`) or placebo (n = `r filter(cond_counts, Treatment == "0") %>% pull(n)`).**
+
+## Task 4: Reproduce Figure 2a
+
+Figure 2A from the original paper is shown in the Analysis R Book.
+
+
+```{r t4}
+crt_means <- crt2 %>% 
+  group_by(Treatment) %>% 
+  summarise(m = mean(CorrectAnswers), sd = sd(CorrectAnswers), se = sd(CorrectAnswers) / sqrt(n_men)) %>%
+  mutate(Treatment = recode(Treatment, "0" = "Placebo Group", "1" = "Testosterone Group"))
+                                                                                                                                                                        
+## TODO: add lines of code using ggplot ## with error bars
+okabe_ito <- c("#E69F00", "#56B4E9")
+ggplot(crt_means, aes(Treatment, m, fill = Treatment)) +
+ geom_col() +
+  geom_errorbar(aes(ymin = m - se, ymax = m + se), width = 0.05) +
+  guides(fill = "none") + 
+  labs(y = "Number of Correct Answers", x = NULL) +
+  scale_fill_manual(values = okabe_ito) +
+  theme_classic() + 
+  coord_cartesian(ylim = c(1.4, 2.4)) 
+  
+```
+
+## Task 5: Interpreting the Figure
+
+
+The Testosterone group (M = 1.66, SD = 1.18) would appear to have fewer correct answers on average than the Placebo group (M = 2.10, SD = 1.02) on the Cognitive Reflection Test suggesting that testosterone does in fact inhibit the ability to override incorrect intuitive judgments with the correct response. 
+
+## Task 6: t-test
+
+
+```{r t6}
+t_table <- t.test(crt2 %>% filter(Treatment == "0") %>% pull(CorrectAnswers),
+                  crt2 %>% filter(Treatment == "1") %>% pull(CorrectAnswers), var.equal = TRUE) %>% tidy()
+```
+
+## Task 7: Reporting results
+
+In the t7A code chunk below, replace the `NULL` with a line of code to pull out the df from t_table. 
+
+```{r t7A}
+t_df <- t_table %>% pull(parameter)
+```
+
+In the t7B code chunk below, replace the `NULL` with a line of code to pull out the t-value from t_table. 
+
+```{r t7B}
+t_value <- t_table %>% pull(statistic) %>% round(digits = 3)
+```
+
+In the t7C code chunk below, replace the `NULL` with a line of code to pull out the p-value from t_table. 
+
+```{r t7C}
+p_value <- t_table %>% pull(p.value) %>% round(digits = 3)
+```
+
+In the t7D code chunk below, replace the `NULL` with a line of code to calculate the absolute difference between the mean number of correct answers for the Testosterone group and the Placebo group. 
+
+```{r t7D}
+t_diff <- t_table %>% pull(estimate) %>% abs() %>% round(digits = 3)
+```
+
+If you have completed t7A to t7D accurately, then when knitted, one of these statements below will produce an accurate and coherent summary of the results. In the t7E code chunk below, replace the `NULL` the number of the statement below that best summarises the data in this study. Store this single value in `answer_t7e`.
+
+The testosterone group performed significantly worse (`r t_diff` fewer correct answers) than the placebo group, t(`r t_df`) = `r t_value`, p = `r p_value`.
+
+
+*Finished*
