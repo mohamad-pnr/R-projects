@@ -1,0 +1,125 @@
+---
+title: "One-Way ANOVA"
+author: "Mohammad Pourabbasian"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r}
+#Setup
+library (pwr)
+library(lsr)
+library(car)
+library(broom)
+library(afex)
+library(emmeans)
+library(performance)
+library(tidyverse)
+dat <- read_csv("James_Holmes_Expt 2_DATA.csv") %>% mutate(subject = row_number())
+```
+```{r}
+#Data Wrangling
+#select and rename columns
+dat2 <- dat %>% select(subject, Condition, Days_One_to_Seven_Image_Based_Intrusions_in_Intrusion_Diary) %>% rename(intrusions = Days_One_to_Seven_Image_Based_Intrusions_in_Intrusion_Diary)
+#recode Condition
+dat2 <- dat2 %>% mutate(Condition = as.factor(Condition))
+```
+
+```{r}
+#Create summary statistics
+sum_dat <- dat2 %>% group_by(Condition) %>% summarise(mean = mean(intrusions),
+                                                      sd = sd(intrusions),
+                                                      se = (sd / n()))
+```
+
+```{r}
+#Visualisation
+
+dat2 %>% ggplot(aes(x = Condition, y = intrusions, fill = Condition)) + 
+  geom_violin(trim = FALSE, alpha = .5) + 
+  geom_boxplot(position = "dodge", width = .2) + 
+  scale_x_discrete(labels = c("No-task control", "Reactivation plus Tetris", "Tetris only", "Reactivation only")) +
+  guides(fill = "none") +
+  theme_bw()
+```
+
+```{r}
+#Bar plot of instrusions by condition
+ggplot(sum_dat, aes(x = Condition, y = mean, fill = Condition))+
+  stat_summary(fun = "mean", geom = "bar", show.legend = FALSE)+
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.25)+
+  scale_y_continuous(limits = c(0,7), 
+                     breaks = c(0,1,2,3,4,5,6,7), 
+                     name = "Intrusive-Memory Frequency (Mean for the Week")+
+  scale_x_discrete(labels = c("No-task control", "Reactivation plus Tetris", "Tetris only", "Reactivation only"))
+```
+```{r}
+#running anova
+mod <- aov_ez(id = "subject", # the column containing the subject IDs
+              dv = "intrusions", # the dependent variable
+              between = "Condition", # the between-subject variable
+              es = "pes", # sets effect size to partial eta-squared
+              type = 3, # this affects how the sum of squares is calculated, set this to 3
+              include_aov = TRUE,
+              data = dat2)
+anova(mod)
+mod_output <- (mod$anova_table) %>% tidy()
+```
+```{r}
+#Assumption check
+qqPlot(mod$aov$residuals)
+shapiro <- shapiro.test(mod$aov$residuals) %>% #run the test
+  tidy() %>% # tidy the output
+  mutate(p.value = round(p.value, digits = 3)) # overwrite the p-value with one rounded to 3 decimal places
+test_levene(mod) #check for homogeneity of vatiance
+```
+
+##Note  
+ Well, Field et al. (2009) say that if the sample sizes for each group are equal then ANOVA is robust to violations of both normality and of homogeneity of variance. 
+
+```{r}
+#Post-hoc tests
+dat2 %>%
+  filter(Condition %in% c("1", "2")) %>%
+ droplevels() %>%
+  t.test(intrusions ~ Condition, data = .)
+#correction for multiple comparisons
+mod_pairwise <-emmeans(mod, pairwise ~ Condition, adjust = "bonferroni")
+mod_contrasts <- mod_pairwise$contrasts %>% tidy()
+```
+
+```{r}
+#Power Analysis
+pwr.anova.test(k = 4, f = .4, sig.level = .05, power = .8)
+```
+```{r}
+#calculating cohen's d for each pairwise comparison
+d_1_2 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(1,2)) %>% 
+                   droplevels())
+d_1_3 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(1,3)) %>%
+                   droplevels()) 
+d_1_4 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(1,4)) %>%
+                   droplevels())
+d_2_3 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(2,3)) %>% 
+                   droplevels())
+d_2_4 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(2,4)) %>% 
+                   droplevels())
+d_3_4 <- cohensD(intrusions ~ Condition, 
+                 data = filter(dat2, Condition %in% c(3,4)) %>%
+                   droplevels())
+pairwise_ds <- c(d_1_2,d_1_3,d_1_4,d_2_3,d_2_4,d_3_4)
+mod_contrasts <- mod_contrasts %>%
+  mutate(eff_size = pairwise_ds)
+```
+
+##Report  
+
+Second, and critically, for the 7-day diary postintervention, there was a significant difference between groups in overall intrusion frequency in daily life, F(`r mod_output$num.Df`, `r mod_output$den.Df`) = `r mod_output$statistic %>% round(2)`, p = `r mod_output$p.value %>% round(3)`, ηp2 = .`r mod_output$ges %>% round(2)`. Planned comparisons demonstrated that relative to the no-task control group, only those in the reactivation-plus-Tetris group, t(`r mod_contrasts$df[1]`) = `r mod_contrasts$statistic[1] %>% round(2)`, p = `r mod_contrasts$adj.p.value[1] %>% round(2)`, d = `r mod_contrasts$eff_size[1] %>% round(2)`, experienced significantly fewer intrusive memories; this finding replicated Experiment 1. The reactivation-plus-Tetris group had significantly fewer intrusive thoughts than the reactivation-only group, t(`r mod_contrasts$df[5]`) = `r mod_contrasts$statistic[5] %>% round(2)`, p = `r mod_contrasts$adj.p.value[5] %>% round(2)`, d = `r mod_contrasts$eff_size[5] %>% round(2)`. Further, there were no significant differences between the reactivation-plus-Tetris group and the Tetris-only group, t(`r mod_contrasts$df[4]`) = `r mod_contrasts$statistic[4] %>% round(2)`, p = `r mod_contrasts$adj.p.value[4] %>% round(2)`, d = `r mod_contrasts$eff_size[4] %>% round(2)`, the no-task control group and the reactivation-only group, t(`r mod_contrasts$df[3]`) = `r mod_contrasts$statistic[3] %>% round(2)`, p = `r mod_contrasts$adj.p.value[3] %>% round(2)`, or between the no-task control group and the Tetris-only group, t(`r mod_contrasts$df[2]`) = `r mod_contrasts$statistic[2] %>% round(2)`, p = `r mod_contrasts$adj.p.value[2] %>% round(2)`
+
+
+
